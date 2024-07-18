@@ -16,6 +16,19 @@ the climate parameters.
 
 The following workflow was utilised to that end:
 
-<img src="figures/workflow.JPG" alt="Analysis Workflow" style="width: 400px;"/>
+<img src="figures/workflow.JPG" alt="Analysis Workflow" style="width: 600px;"/>
 
 The Google Earth Engine Scripts are available via the following Link:
+
+<https://code.earthengine.google.com/?accept_repo=users/lobrecht940/HotForests>
+
+## Poster
+
+The following Poster was prepared and presented as part of the course
+project:
+
+<img src="figures/Poster.png" alt="HotForests Poster" style="width: 800px;"/>
+
+### Contact
+
+Laura Obrecht: <laura.obrecht@stud-mail.uni-wuerzburg.de>
