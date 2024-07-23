@@ -1,0 +1,151 @@
+// Trend over entire observation period aggregated
+
+var hotforests = require('users/lobrecht940/HotForests:HotForests_functions');
+
+var countries = ee.FeatureCollection('FAO/GAUL/2015/level1');
+var ERA5 = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR');
+var corine = ee.ImageCollection("COPERNICUS/CORINE/V20/100m");
+
+// crop to Bavaria
+var bavaria = countries.filter('ADM1_NAME == "Bayern"');
+
+// corine land cover
+var dataset = ee.Image('COPERNICUS/CORINE/V20/100m/2018');
+var landCover = dataset.select("landcover");
+
+var forestImage = landCover.updateMask(hotforests.forestMask);
+Map.addLayer(forestImage, {}, 'Forest mask');
+var scale_factor = 10000000000;
+
+// Color palettes
+var palettes = require('users/gena/packages:palettes');
+var RdYlBu = palettes.colorbrewer.RdYlBu[11].reverse();
+
+var trend_vis = {
+  min: -0.00001 * scale_factor, max: 0.00001 *scale_factor,
+  palette:RdYlBu
+};
+
+// add year/month band to image collection with parameter year
+var addYearMonthBand = function(image) {
+  var index = ee.Number.parse(image.get('system:index'));
+  return image.addBands(ee.Image.constant(index).rename('index').toFloat());
+};
+
+Map.setCenter(11.2, 49.1, 7);
+
+var start_month = ee.Date('1950-01-02');
+var end_month = ee.Date('2024-05-17');
+
+var n_months = end_month.difference(start_month,'month').round();
+var dates = ee.List.sequence(0,n_months,1);
+var make_datelist = function(n) {
+  return start_month.advance(n,'month');
+};
+
+dates = dates.map(hotforests.make_datelist);
+
+// Linear Trend Test Precipitation
+var climate_param = 'total_precipitation_sum'
+var list_of_images = dates.map(hotforests.fnc(climate_param));
+
+var monthly_temp = ee.ImageCollection.fromImages(list_of_images.flatten());
+print(monthly_temp, 'Monthly');
+
+var months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+
+var statisticsByMonth = ee.ImageCollection.fromImages(months.map(hotforests.calculateStatistics(monthly_temp)));
+print(statisticsByMonth);
+
+// Calculate anomalies for each month and year
+var monthlyAnomalies = monthly_temp.map(hotforests.calculateAnomalies(statisticsByMonth));
+print('Monthly Anomalies:', monthlyAnomalies);
+
+var monthlyAnomalies = monthlyAnomalies.map(addYearMonthBand);
+print(monthlyAnomalies, 'with index');
+
+var linearfit = monthlyAnomalies.select(['index', climate_param]).reduce(ee.Reducer.linearFit());
+
+//Trends displayed in colour
+var slope = linearfit.select('scale').clip(bavaria).multiply(scale_factor).toInt(); //export as scaled integer to save processing time
+Map.addLayer(slope, trend_vis, ' Linear Fit Slope Precipitation');
+
+Export.image.toDrive({
+  image: slope,
+  description: climate_param + '_all_lineartrend_slope-v3',
+  folder: 'GEE_exports',
+  scale: 10000, 
+  crs: 'EPSG:4326',  // Change CRS if needed
+  fileFormat: 'GeoTIFF',
+  maxPixels: 1e13
+});
+
+// Linear Trend Test Evaporation
+var climate_param = 'total_evaporation_sum'
+var list_of_images = dates.map(hotforests.fnc(climate_param));
+
+var monthly_temp = ee.ImageCollection.fromImages(list_of_images.flatten());
+print(monthly_temp, 'Monthly');
+
+var months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+
+var statisticsByMonth = ee.ImageCollection.fromImages(months.map(hotforests.calculateStatistics(monthly_temp)));
+
+// Calculate anomalies for each month and year
+var monthlyAnomalies_ET = monthly_temp.map(hotforests.calculateAnomalies(statisticsByMonth));
+print('Monthly Anomalies:', monthlyAnomalies_ET);
+
+var monthlyAnomalies_ET = monthlyAnomalies_ET.map(addYearMonthBand);
+print(monthlyAnomalies_ET, 'with index');
+
+var linearfit_ET = monthlyAnomalies_ET.select(['index', climate_param]).reduce(ee.Reducer.linearFit());
+
+//Trends displayed in colour
+var slope_ET = linearfit_ET.select('scale').clip(bavaria).multiply(scale_factor).toInt(); //export as scaled integer to save processing time
+Map.addLayer(slope_ET, trend_vis, ' Linear Fit Slope ET');
+
+Export.image.toDrive({
+  image: slope,
+  description: climate_param + '_all_lineartrend_slope-v4',
+  folder: 'GEE_exports',
+  scale: 10000, 
+  crs: 'EPSG:4326',  // Change CRS if needed
+  fileFormat: 'GeoTIFF',
+  maxPixels: 1e13
+});
+
+// Linear Trend Test Temperature
+var climate_param = 'temperature_2m'
+var list_of_images = dates.map(hotforests.fnc(climate_param));
+
+var monthly_temp = ee.ImageCollection.fromImages(list_of_images.flatten());
+print(monthly_temp, 'Monthly');
+//var masked_collection = monthly_collection.map(hotforests.maskCollection(hotforests.forestMask));
+
+var statisticsByMonth = ee.ImageCollection.fromImages(months.map(hotforests.calculateStatistics(monthly_temp)));
+
+// Calculate anomalies for each month and year
+var monthlyAnomalies_T = monthly_temp.map(hotforests.calculateAnomalies(statisticsByMonth));
+print('Monthly Anomalies:', monthlyAnomalies_ET);
+
+var monthlyAnomalies_T = monthlyAnomalies_T.map(addYearMonthBand);
+print(monthlyAnomalies_T, 'with index');
+//Map.addLayer(monthlyAnomalies.filterMetadata('month', 'equals', '12').select('index').first(), {}, 'Index');
+
+var linearfit_T = monthlyAnomalies_T.select(['index', climate_param]).reduce(ee.Reducer.linearFit());
+//var linearfit = jan.map(hotforests.get_linearFit(climate_param));
+  
+//Trends displayed in colour
+var slope_T = linearfit_T.select('scale').clip(bavaria).multiply(scale_factor).toInt(); //export as scaled integer to save processing time
+Map.addLayer(slope_T, trend_vis, ' Linear Fit Slope T');
+
+
+Export.image.toDrive({
+  image: slope,
+  description: climate_param + '_all_lineartrend_slope-v4',
+  folder: 'GEE_exports',
+  scale: 10000, 
+  crs: 'EPSG:4326',  // Change CRS if needed
+  fileFormat: 'GeoTIFF',
+  maxPixels: 1e13
+});

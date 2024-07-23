@@ -1,0 +1,165 @@
+// functions used in HotForests Project
+
+var countries = ee.FeatureCollection('FAO/GAUL/2015/level1');
+var ERA5 = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR');
+var bavaria = countries.filter('ADM1_NAME == "Bayern"');
+
+// Forest Masks
+var dataset = ee.Image('COPERNICUS/CORINE/V20/100m/2018');
+var landCover = dataset.select("landcover");
+
+// Create masks for each forest type
+var mask_broadleaf = landCover.eq(311);
+var mask_coni = landCover.eq(312);
+var mask_mixed = landCover.eq(313);
+
+// Combine the masks
+exports.forestMask = mask_broadleaf.or(mask_coni).or(mask_mixed);
+
+// apply mask to collection
+exports.maskCollection = function(mask){
+  var wrap = function(image){
+    var maskedimg =image.updateMask(mask); 
+    return maskedimg;
+  }
+  return(wrap);
+};
+
+// make Feature Collection from Image Collection with band forest_mean
+exports.get_FC = function(image) {
+    //var date = ee.Date(image.get('system:time_start'));
+    var year = image.get('year');
+    var month = image.get('month');
+    var forestMean = image.get('forest_mean');
+    return ee.Feature(null, {year: year, month: month, forest_mean: forestMean});
+  };
+
+// make time series of era5 layer, composited with mean, variable is called forest_mean by default  
+exports.get_forest_ts = function(era5_lyr){
+    var warp = function(image){
+      //var masked_img = image.updateMask(forestMask);
+      var meanDict = image.reduceRegion({
+        reducer: ee.Reducer.mean(),
+        geometry: bavaria, // Change to your region of interest if needed
+        scale: 1000,
+        bestEffort: true
+      });
+      var mean = ee.Number(meanDict.get(era5_lyr));
+      return image.set('forest_mean', mean);
+    }
+    return warp
+  };
+
+
+// calculate monthly era5 composites
+exports.fnc = function(era5_lyr) {
+  var wrap = function(d1){
+    var start = ee.Date(d1);
+    var end = ee.Date(d1).advance(1,'month');
+    var date_filter = ee.Filter.date(start, end);
+    var img; // select different layers
+  
+    if (era5_lyr == 'temperature_2m'){
+      img = ERA5.filter(date_filter).select(era5_lyr).mean().clip(bavaria);
+    }else{
+      img = ERA5.filter(date_filter).select(era5_lyr).sum().clip(bavaria);
+    }
+    var year = start.get('year').format();
+    var month = start.get('month').format('%02d');
+  
+    return img.set('year', year).set('month', month);
+  }
+  return wrap
+};
+
+// Function to calculate statistics for each month over the entire period
+exports.calculateStatistics = function(monthly_temp) {
+  var wrap = function(month){
+    var monthlyImages = monthly_temp.filterMetadata('month', 'equals', month);
+    
+    var mean = monthlyImages.mean().set('month', month, 'statistic', 'mean');
+    var min = monthlyImages.min().set('month', month, 'statistic', 'min');
+    var max = monthlyImages.max().set('month', month, 'statistic', 'max');
+    var median = monthlyImages.median().set('month', month, 'statistic', 'median');
+    var stdDev = monthlyImages.reduce(ee.Reducer.stdDev()).set('month', month, 'statistic', 'stdDev');
+    
+    var stats = mean.addBands(min).addBands(max).addBands(median).addBands(stdDev).rename('Mean', 'Min', 'Max', 'Med', 'stdDev');
+      
+    return stats
+  }
+  return wrap
+};
+
+// Function to calculate anomalies
+exports.calculateAnomalies = function(statisticsByMonth) {
+  var wrap = function(image){
+    var month = image.get('month');
+    var longTermMean = statisticsByMonth.filterMetadata('month', 'equals', month).select('Mean').first();
+    var anomaly = image.subtract(longTermMean).set('month', month, 'year', image.get('year'), 'statistic', 'anomaly');
+    return anomaly;
+  }
+  return wrap
+};
+
+// add year band to image collection with parameter year
+exports.addYearBand = function(image) {
+  var year = ee.Number.parse(image.get('year'));
+  return image.addBands(ee.Image.constant(year).rename('year').toFloat());
+};
+
+// add year/month band to image collection with parameter year
+exports.addYearMonthBand = function(image) {
+  var index = ee.Number.parse(image.get('system:index'));
+  return image.addBands(ee.Image.constant(index).rename('index').toFloat());
+};
+// calculate linear fit
+exports.get_linearFit = function(climate_param){
+  var warp = function(imgCollection){
+    var linearFit = imgCollection.select(['year', climate_param]).reduce(ee.Reducer.linearFit());
+    return linearFit;
+  };
+  return warp;
+};
+
+exports.clipCollection = function(feature){
+  var wrap = function(image){
+    var maskedimg =image.clip(feature); 
+    return maskedimg;
+  }
+  return(wrap);
+};
+
+var start_month = ee.Date('1950-01-02');
+var end_month = ee.Date('2024-05-17');
+
+var n_months = end_month.difference(start_month,'month').round();
+var dates = ee.List.sequence(0,n_months,1);
+
+exports.make_datelist = function(n) {
+  return start_month.advance(n,'month');
+};
+
+// ------------ Visualizations ----------
+// add ERA5 temperature visualization
+exports.visualization_T = {
+  //bands: ['temperature_2m'],
+  min: 250,
+  max: 320,
+  palette: [
+    '000080', '0000d9', '4000ff', '8000ff', '0080ff', '00ffff',
+    '00ff80', '80ff00', 'daff00', 'ffff00', 'fff500', 'ffda00',
+    'ffb000', 'ffa400', 'ff4f00', 'ff2500', 'ff0a00', 'ff00ff',
+  ]
+};
+
+var palettes = require('users/gena/packages:palettes');
+var blue_palette = palettes.colorbrewer.Blues[9];
+var red_blue_palette = palettes.colorbrewer.RdBu[9].reverse();
+exports.visualization_prec = {bands:['total_precipitation_sum'],
+  min: 0, max: 0.5, 
+  palette: blue_palette};
+
+exports.visualization_trend = {
+  min: -0.1, max: 0.1,
+  palette:red_blue_palette
+};

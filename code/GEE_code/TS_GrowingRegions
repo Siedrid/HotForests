@@ -1,0 +1,69 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var table = ee.FeatureCollection("projects/ee-lobrecht940/assets/Growing_Areas_Bav_updated_20240620");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// ERAfive Climate Vars per Growing Areas or Naturparks
+var hotforests = require('users/lobrecht940/HotForests:HotForests_functions');
+
+var countries = ee.FeatureCollection('FAO/GAUL/2015/level1');
+var ERA5 = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR');
+var shapefile = table;
+print(table);
+
+var climate_param = 'temperature_2m'; // change to 'total_precipitation_sum' or 'total_evaporation_sum'
+Map.setCenter(11.2, 49.1, 7);
+
+// Bavaria Mask
+var bavaria = countries.filter('ADM1_NAME == "Bayern"');
+
+// Forest Masks
+var dataset = ee.Image('COPERNICUS/CORINE/V20/100m/2018');
+var landCover = dataset.select("landcover");
+
+// Create masks for each forest type
+var mask_broadleaf = landCover.eq(311);
+var mask_coni = landCover.eq(312);
+var mask_mixed = landCover.eq(313);
+
+// Combine the masks
+var forestMask = mask_broadleaf.or(mask_coni).or(mask_mixed);
+
+var start_month = ee.Date('1950-01-02');
+var end_month = ee.Date('2024-06-01');
+
+var n_months = end_month.difference(start_month,'month').round();
+var dates = ee.List.sequence(0,n_months,1);
+var make_datelist = function(n) {
+  return start_month.advance(n,'month');
+};
+
+dates = dates.map(make_datelist);
+
+var months = ee.List.sequence(1, 12).map(function(month) {
+  return ee.Number(month).format('%02d');
+});
+
+var list_of_images = dates.map(hotforests.fnc(climate_param));
+print('Img List:', list_of_images);
+
+var monthly_collection = ee.ImageCollection.fromImages(list_of_images.flatten());
+var masked_collection = monthly_collection.map(hotforests.maskCollection(forestMask));
+
+// Enter Name of Growing Region here:
+var bayrischerWald = shapefile.filter('bez_bu_wg == "Schwaebisch-Bayerische Schotterplatten- und Altmoraenenlandschaft"');
+var growName = ee.String(bayrischerWald.first().get('bez_bu_wg'));
+print(growName);
+var masked_byGrowRegion = masked_collection.map(hotforests.clipCollection(bayrischerWald));
+
+Map.addLayer(bayrischerWald, {}, 'first grow region');
+var forest_ts = masked_byGrowRegion.map(hotforests.get_forest_ts(climate_param));
+print(forest_ts);
+
+var forestMeanFC = forest_ts.map(hotforests.get_FC);
+var csv_name = 'Mean_' + climate_param;
+    
+Export.table.toDrive({
+  collection: forestMeanFC,
+  description: csv_name,
+  folder: 'GEE_exports',  
+  fileFormat: 'CSV'
+});

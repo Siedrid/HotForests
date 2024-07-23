@@ -1,0 +1,90 @@
+// Time series of ERA5 climate Variables, exported as csv, per forest type
+
+var hotforests = require('users/lobrecht940/HotForests:HotForests_functions');
+
+var countries = ee.FeatureCollection('FAO/GAUL/2015/level1');
+var ERA5 = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR');
+
+Map.setCenter(11.2, 49.1, 7);
+
+// Bavaria Mask
+var bavaria = countries.filter('ADM1_NAME == "Bayern"');
+
+// Forest Masks
+var dataset = ee.Image('COPERNICUS/CORINE/V20/100m/2018');
+var landCover = dataset.select("landcover");
+
+// Create masks for each forest type
+var mask_broadleaf = landCover.eq(311);
+var mask_coni = landCover.eq(312);
+var mask_mixed = landCover.eq(313);
+
+// Combine the masks
+var forestMask = mask_broadleaf.or(mask_coni).or(mask_mixed);
+
+
+// visualization
+var palettes = require('users/gena/packages:palettes');
+var blue_palette = palettes.colorbrewer.Blues[9];
+var red_blue_palette = palettes.colorbrewer.RdBu[9].reverse();
+
+var trend_vis = {
+  min: -0.1, max: 0.1,
+  palette:red_blue_palette
+};
+
+var start_month = ee.Date('1950-01-02');
+var end_month = ee.Date('2024-05-17');
+
+var n_months = end_month.difference(start_month,'month').round();
+var dates = ee.List.sequence(0,n_months,1);
+var make_datelist = function(n) {
+  return start_month.advance(n,'month');
+};
+dates = dates.map(make_datelist);
+
+var months = ee.List.sequence(1, 12).map(function(month) {
+  return ee.Number(month).format('%02d');
+});
+
+var forestImage = landCover.updateMask(forestMask);
+
+// iterate over three era5 layers
+var lyrs = ['temperature_2m', 'total_precipitation_sum', 'total_evaporation_sum'];
+
+for (var i = 0; i < lyrs.length; i++){
+  print('Processed Layer: ', lyrs[i]);
+  var list_of_images = dates.map(hotforests.fnc(lyrs[i]));
+  //var prec_list = dates.map(fnc('total_precipitation_sum'));
+  print('Img List:', list_of_images);
+
+  var monthly_collection = ee.ImageCollection.fromImages(list_of_images.flatten());
+  // Map.addLayer(monthly_prec.first(), prec_vis, 'monthly_precipitation');
+
+
+  // ------------- produce time series for forest types ---------------------
+    
+  // mask collection with the four forest masks
+  var forest_masks = [mask_broadleaf, mask_coni, mask_mixed, forestMask];
+  var maskNames = ['Broad-leaved', 'Coniferous', 'Mixed', 'allForest'];
+  
+  for (var j = 0; j < forest_masks.length; j++){
+    var masked_collection = monthly_collection.map(hotforests.maskCollection(forest_masks[j]));
+    
+    var forest_ts = masked_collection.map(hotforests.get_forest_ts(lyrs[i]));
+    // var forest_ts_prec = monthly_prec.map(get_forest_ts('total_precipitation_sum'));
+    //print('Time series of ERA 5 Layer in Forest Areas: ', forest_ts);
+    
+    // get time series of monthly mean temperatures over forests
+    var forestMeanFC = forest_ts.map(hotforests.get_FC);
+    
+    var csv_name = 'Mean_' + lyrs[i] + '_' + maskNames[j];
+    
+    Export.table.toDrive({
+      collection: forestMeanFC,
+      description: csv_name,
+      folder: 'GEE_export',  
+      fileFormat: 'CSV'
+    });
+  }
+}

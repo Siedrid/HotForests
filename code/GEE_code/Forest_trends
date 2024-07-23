@@ -1,0 +1,75 @@
+// Rasters of Trends of Climate Variables per Month
+
+var hotforests = require('users/lobrecht940/HotForests:HotForests_functions');
+
+var countries = ee.FeatureCollection('FAO/GAUL/2015/level1');
+var ERA5 = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR');
+var corine = ee.ImageCollection("COPERNICUS/CORINE/V20/100m");
+
+var bavaria = countries.filter('ADM1_NAME == "Bayern"');
+var landCover = corine.first().clip(bavaria);
+var forestImage = landCover.updateMask(hotforests.forestMask);
+Map.addLayer(forestImage, {}, 'Forest mask');
+
+// visualization
+var palettes = require('users/gena/packages:palettes');
+var blue_palette = palettes.colorbrewer.Blues[9];
+var red_blue_palette = palettes.colorbrewer.RdBu[9].reverse();
+var RdYlBu = palettes.colorbrewer.RdYlBu[11].reverse();
+var prec_vis = {bands:['total_precipitation_sum'],
+  min: 0, max: 0.5, 
+  palette: blue_palette};
+
+var trend_vis = {
+  min: -0.05, max: 0.05,
+  palette:RdYlBu
+};
+
+
+Map.setCenter(11.2, 49.1, 7);
+
+var start_month = ee.Date('1950-01-02');
+var end_month = ee.Date('2024-05-17');
+
+var n_months = end_month.difference(start_month,'month').round();
+var dates = ee.List.sequence(0,n_months,1);
+var make_datelist = function(n) {
+  return start_month.advance(n,'month');
+};
+
+dates = dates.map(make_datelist);
+
+// Linear Trend Test
+var climate_param = 'total_evaporation_sum' // change to 'total_precipitation_sum' and 'temperature_2m'
+var list_of_images = dates.map(hotforests.fnc(climate_param));
+
+var monthly_collection = ee.ImageCollection.fromImages(list_of_images.flatten());
+var masked_collection = monthly_collection.map(hotforests.maskCollection(hotforests.forestMask));
+
+var months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+
+for (var j = 0; j < months.length; j++){
+  var jan = monthly_collection.filterMetadata('month', 'equals', months[j]);
+  // Map.addLayer(jan.first(), hotforests.visualization_T, months[j] + ' mean temperature');
+  
+  var jan = jan.map(hotforests.addYearBand);
+  var linearfit = jan.select(['year', climate_param]).reduce(ee.Reducer.linearFit());
+  //var linearfit = jan.map(hotforests.get_linearFit(climate_param));
+  
+  //Trends displayed in colour
+  Map.addLayer(linearfit.select('scale').clip(bavaria), trend_vis, months[j] + ' Linear Fit Slope');
+  var slope = linearfit.select('scale').clip(bavaria).multiply(1000);
+  // add bands to one multi layer raster
+  
+  Export.image.toDrive({
+  image: slope,
+  description: climate_param + '_' + months[j] + '_lineartrend_slope',
+  folder: 'GEE_exports',
+  scale: 10000, 
+  crs: 'EPSG:4326',  // Change CRS if needed
+  fileFormat: 'GeoTIFF',
+  maxPixels: 1e13
+});
+
+}
+
