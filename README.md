@@ -16,11 +16,13 @@ the climate parameters.
 
 The following workflow was utilised to that end:
 
-<img src="figures/workflow.JPG" alt="Analysis Workflow" style="width: 600px;"/>
+<img src="figures/workflow.JPG" alt="Analysis Workflow" style="width: 700px;"/>
 
 The Google Earth Engine Scripts are available via the following Link:
 
 <https://code.earthengine.google.com/?accept_repo=users/lobrecht940/HotForests>
+
+The GEE code can also be accessed in the folder `code/GEE_code`.
 
 ## Poster
 
