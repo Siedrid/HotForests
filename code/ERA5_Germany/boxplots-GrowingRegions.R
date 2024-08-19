@@ -1,0 +1,73 @@
+# Boxplots per Wuchsgebiet
+
+# forest types
+mixed.forest <- frst
+mixed.forest[!values(mixed.forest) == 23] <- NA
+coni <- frst
+coni[!values(coni) == 24] <- NA
+broad <- frst
+broad[!values(broad) == 25] <- NA
+
+# extract values from Raster and covnert it to long table format
+box.vals <- function(climat.rst, grow.vect, grow.ID){
+  
+  msk <- mask(climat.rst, grow.vect[grow.vect$ID == grow.ID,])
+  msk.slope <- msk$slope
+  
+  # extract values
+  vals1 <- mask(msk.slope, mixed.forest) %>% values()
+  vals2 <- mask(msk.slope, broad) %>% values() 
+  vals3 <- mask(msk.slope, coni) %>% values() 
+  
+  df <- data.frame('mixed' = vals1, 'coni' = vals2, 'broad' = vals3)
+  colnames(df) <- c('Mixed Forest', 'Coniferous', 'Broad-leaved')
+  df.long <- tidyr::pivot_longer(df, cols = c('Mixed Forest', 'Broad-leaved', 'Coniferous'))
+
+  return(df.long)
+}
+
+# Function for Plotting
+plt.boxplot <- function(df.long, var.name, grow.ID){
+  tplot <- ggplot(df.long, aes(x = name, y = value, fill = name)) + 
+    ## add half-violin from {ggdist} package
+    ggdist::stat_halfeye(
+      ## custom bandwidth
+      adjust = .5, 
+      ## adjust height
+      width = .6, 
+      ## move geom to the right
+      justification = -.2, 
+      ## remove slab interval
+      .width = 0, 
+      point_colour = NA
+    ) + 
+    scale_fill_manual(values = c("#80FF00", "#00A600", "#44AA99"))+
+    geom_boxplot(
+      width = .15, 
+      ## remove outliers
+      outlier.color = NA ## `outlier.shape = NA` or `outlier.alpha = 0` works as well
+    )+
+    xlab("")+
+    ylab(paste0(var.name, " Slope"))+
+
+    theme(panel.background = element_rect(fill='transparent'),
+          plot.background = element_rect(fill='transparent', color=NA),
+          legend.position = "none")
+  
+  tplot <- tplot+ theme(text=element_text(size=20), #change font size of all text
+               axis.text=element_text(size=20), #change font size of axis text
+               axis.title=element_text(size=20))
+  
+  ggsave(plot = tplot, filename = paste0("Maps/Boxplots/", grow.ID, "_", var.name, "-Violinplot.png"), 
+         width = 20, height = 15, units = "cm", bg = "transparent")
+
+  return(tplot)
+}
+
+# Iterate over the Growing Regions
+growing_areas_agg <- aggregate(growregion, by = list(growregion$bez_bu_wg), FUN = mean)
+names(growing_areas_agg)[names(growing_areas_agg) == "Group.1"] <- "Name"
+growing_areas_agg$ID <- c(1:82)
+
+df <- box.vals(Temp.rast, growing_areas_agg, 4)
+plt.boxplot(df, "Temperature", 4)
