@@ -18,7 +18,6 @@ import pymannkendall as mk
 
 os.chdir("E:/EAGLE\\Forest_Project\\")
 
-T_ts = pd.read_csv("Data/GEE_export/TS_Wuchsgebiete/Mean_temperature_2m_combined_AllRegions.csv")
 
 def make_date_column(df):
     dt = [datetime.strptime(str(df.year[i]) + '-' + str(df.month[i]).zfill(2)+ '-' + '01', "%Y-%m-%d") for i in range(len(df))]
@@ -77,11 +76,11 @@ def get_trend_mann_kendall(data):
 
 def calculate_anomalies(df_combined):
     # Calculate the mean temperature for each month across all years and forest types
-    monthly_means = df_combined.groupby(['region', 'month'])['forest_mean'].mean().reset_index()
+    monthly_means = df_combined.groupby(['month'])['forest_mean'].mean().reset_index()
     monthly_means = monthly_means.rename(columns={'forest_mean': 'monthly_mean'})
     
     # Merge the monthly means with the original dataframe
-    df_combined = pd.merge(df_combined, monthly_means, on=['region', 'month'])
+    df_combined = pd.merge(df_combined, monthly_means, on=['month'])
     
     # Calculate anomalies
     df_combined['anomaly'] = df_combined['forest_mean'] - df_combined['monthly_mean']
@@ -115,21 +114,23 @@ def plot_anomalies(df, climate_param):
    
    ax.text(df.dt.iloc[10], unit_dic[climate_param][3]-2,'Linear Trend = '+str(round(yr_tr,3))+ ' ' + unit_dic[climate_param][0] + '/decade', fontsize = fontsize-5) # decode unit somewhere
    ax.tick_params(labelsize=fontsize-10)
-   ax.set_title(unit_dic[climate_param][1] + ' Anomalies in ' + np.unique(df.region)[0], fontsize = fontsize)
+   #ax.set_title(unit_dic[climate_param][1] + ' Anomalies in ' + np.unique(df.region)[0], fontsize = fontsize)
    ax.set_ylabel(unit_dic[climate_param][1] + ' Anomalies ' + '[' + unit_dic[climate_param][0] + ']', fontsize = fontsize-10)
    ax.grid()
    ax.legend(loc = 'lower left', markerscale = 1.2, fontsize = fontsize-10)
-   #fig.savefig("Plots/" + climate_param + "_anomaly_timeseries.png") 
+   fig.savefig("Maps/Timeseries/" + climate_param + "_anomaly_timeseries.png") 
    return df
 
 #%% Plot Time Series
+ET_ts = pd.read_csv("Data/tables/Mean_forest_total_evaporation_sum.csv")
+T_ts = pd.read_csv("Data/tables/Mean_forest_temperature_2m.csv")
 
 Temp_ts = make_date_column(T_ts)
-Temp_ts = Temp_ts[['forest_mean', 'region', 'year', 'month', 'dt']]
-
+Temp_ts = Temp_ts[['forest_mean', 'year', 'month', 'dt']]
 Temp_ts = calculate_anomalies(Temp_ts)
+plot_anomalies(Temp_ts, 'temperature_2m')
 
-# Loop through Regions?
-bayAlps = Temp_ts[Temp_ts['region'] == 'Bayerische Alpen']
-plot_anomalies(bayAlps, 'temperature_2m')
-
+ET_ts = make_date_column(ET_ts)
+ET_ts['forest_mean'] = ET_ts['forest_mean']*1000
+ET_ts = calculate_anomalies(ET_ts)
+plot_anomalies(ET_ts, 'total_evaporation_sum')

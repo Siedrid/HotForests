@@ -84,15 +84,18 @@ bb <- st_bbox(frst)
 Temp.rast <- rast("Data/GEE_export/Trend_ObsPeriod/slope_temperature_2m.tif")
 Temp.rast <- mask.forest(Temp.rast, frst)
 T_rst <- Temp.rast * 120
+#writeRaster(T_rst, "Data/Final-Results/trend_raster/slope_temperature_2m.tif")
 
 # Evaporation
 evapo.rast <- rast("Data/GEE_export/Trend_ObsPeriod/slope_total_evaporation_sum.tif") %>% mask.forest(frst)
 ET_rst <- evapo.rast * 1000 * 120
+#writeRaster(ET_rst, "Data/Final-Results/trend_raster/slope_total_evaporation_sum.tif")
 
 # Precipitation
 prec.rast <- rast("Data/GEE_export/Trend_ObsPeriod/slope_total_precipitation_sum.tif") %>% 
   mask.forest(frst)
 prec_rst <- prec.rast * 1000 * 120
+#writeRaster(prec_rst, "Data/Final-Results/trend_raster/slope_total_precipitation_sum.tif")
 
 # Plotting ----
 plot_trend_map(T_rst$slope, "Temperature", brewer.pal(9, 'YlOrRd'), c(0.25,0.35), 

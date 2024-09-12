@@ -30,7 +30,7 @@ box.vals <- function(climat.rst, grow.vect, grow.ID){
 # Function for Plotting
 plt.boxplot <- function(df.long, var.name, grow.ID){
   
-  grow.name <- growing_areas_agg[growing_areas_agg$ID == grow.ID,]$Name
+  #grow.name <- growing_areas_agg[growing_areas_agg$ID == grow.ID,]$Name
   tplot <- ggplot(df.long, aes(x = name, y = value, fill = name)) + 
     ## add half-violin from {ggdist} package
     ggdist::stat_halfeye(
@@ -80,3 +80,21 @@ for (id in c(1:82)){
   df.et <- box.vals(ET_rst, growing_areas_agg, id)
   plt.boxplot(df.et, "Evapotranspiration", id)
 }
+
+
+# For entire Germany -----
+# extract values
+
+results_list <- list()
+for (class.id in 23:25){
+  frst.mask <- frst
+  frst.mask[!values(frst.mask) == class.id] <- NA
+  
+  extr <- mask(T_rst$slope, frst.mask) %>% values()
+  extr$class.id <- class.id
+  results_list[[class.id]] <- extr
+}
+df <- bind_rows(results_list)
+
+plt.boxplot(df, 'Temperature', 0)
+box.vals(ET_rst$slope) %>% plt.boxplot(., 'Evaporation', 0)

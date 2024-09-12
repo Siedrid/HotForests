@@ -4,10 +4,19 @@ library(ggnewscale)
 
 monthly_ET <- rast("Data/GEE_export/Trend_ObsPeriod/total_evaporation_sum_Monthly_SensSlope.tif") %>% 
   mask.forest(frst)
+names(monthly_ET) <- month.abb
+writeRaster(monthly_ET, "Data/Final-Results/monthly_trend_raster/total_evaporation_sum_Monthly_SensSlope.tif")
+
 monthly_prec <- rast("Data/GEE_export/Trend_ObsPeriod/total_precipitation_sum_Monthly_SensSlope.tif") %>% 
   mask.forest(frst)
+names(monthly_prec) <- month.abb
+writeRaster(monthly_prec, "Data/Final-Results/monthly_trend_raster/total_precipitation_sum_Monthly_SensSlope.tif")
+
 monthly_T <- rast("Data/GEE_export/Trend_ObsPeriod/temperature_2m_Monthly_SensSlope.tif") %>% 
   mask.forest(frst)
+names(monthly_T) <- month.abb
+writeRaster(monthly_T, "Data/Final-Results/monthly_trend_raster/temperature_2m_Monthly_SensSlope.tif")
+
 
 # Plotting
 dif <- st_difference(st_as_sfc(bb), ger)
