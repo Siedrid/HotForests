@@ -1,4 +1,5 @@
 # Boxplots per Wuchsgebiet
+frst <- rast("Data/GEE_export/corine/Corine_forestmask-2018.tif")
 
 # forest types
 mixed.forest <- frst
@@ -95,6 +96,6 @@ for (class.id in 23:25){
   results_list[[class.id]] <- extr
 }
 df <- bind_rows(results_list)
-
+write.csv(df, )
 plt.boxplot(df, 'Temperature', 0)
 box.vals(ET_rst$slope) %>% plt.boxplot(., 'Evaporation', 0)
